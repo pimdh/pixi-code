@@ -144,8 +144,8 @@ export async function refreshPixi(project_path: string): Promise<PixiEnvironment
                     },
                     activation: [
                         {
-                            executable: pixi,
-                            args: ['shell', '--manifest-path', manifestPath, '-e', pixiEnv.name],
+                            executable: 'eval',
+                            args: [`"$(${pixi} shell-hook --manifest-path ${manifestPath} -e ${pixiEnv.name})"`],
                         },
                     ],
                     deactivation: [
