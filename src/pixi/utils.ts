@@ -1,13 +1,14 @@
 import * as ch from 'child_process';
 import * as fs from 'fs';
-import { CancellationError, CancellationToken, Uri, window, workspace } from 'vscode';
+import * as path from 'path';
+import { CancellationError, CancellationToken, Uri, window, workspace, WorkspaceFolder } from 'vscode';
 import which from 'which';
 
 import { Package } from '../api';
 import { createDeferred } from '../common/deferred';
 import { quoteArgs } from '../common/execUtils';
 import { findPythonExecutable } from '../common/findPython';
-import { traceError, traceInfo, traceVerbose } from '../common/logging';
+import { traceError, traceVerbose } from '../common/logging';
 import { getWorkspacePersistentState } from '../common/persistentState';
 import { EXTENSION_ID, untildify } from '../common/utils';
 import { PixiEnvironment, PixiInfo, PixiPackage } from './types';
@@ -170,7 +171,7 @@ export async function refreshPixi(project_path: string): Promise<PixiEnvironment
 
         return environments;
     } catch (error) {
-        traceInfo(`Failed to get pixi environments: ${error}`);
+        traceVerbose(`Failed to get pixi environments: ${error}`);
         return [];
     }
 }
@@ -226,4 +227,69 @@ export async function setProjectEnvId(projectPath: string, envId: string | undef
         delete data[projectPath];
     }
     await state.set(PIXI_WORKSPACE_KEY, data);
+}
+/**
+ * Checks if a pyproject.toml file contains Pixi configuration ([tool.pixi]).
+ * Returns true if the file exists and contains [tool.pixi] section.
+ */
+function isPyprojectWithPixi(pyprojectPath: string): boolean {
+    try {
+        if (!fs.existsSync(pyprojectPath)) {
+            return false;
+        }
+
+        const content = fs.readFileSync(pyprojectPath, 'utf-8');
+
+        // Simple check for [tool.pixi] section
+        // This matches [tool.pixi], [tool.pixi.workspace], [tool.pixi.dependencies], etc.
+        return /^\[tool\.pixi(\.|])/m.test(content);
+    } catch (error) {
+        traceVerbose(`Error reading pyproject.toml at ${pyprojectPath}: ${error}`);
+        return false;
+    }
+}
+
+/**
+ * Recursively searches for pixi.toml or pyproject.toml (with [tool.pixi]) files
+ * in the given directory and its subdirectories.
+ * Returns an array of directory paths containing Pixi projects.
+ */
+export function findPixiProjects(searchPath: string, maxDepth: number = 3, currentDepth: number = 0): string[] {
+    const results: string[] = [];
+
+    try {
+        // Check if current directory has pixi.toml
+        const pixiTomlPath = path.join(searchPath, 'pixi.toml');
+        const hasPixiToml = fs.existsSync(pixiTomlPath);
+
+        // Check if current directory has pyproject.toml with [tool.pixi]
+        const pyprojectPath = path.join(searchPath, 'pyproject.toml');
+        const hasPyprojectWithPixi = isPyprojectWithPixi(pyprojectPath);
+
+        if (hasPixiToml) {
+            traceVerbose(`Found Pixi project (pixi.toml) at: ${searchPath}`);
+            results.push(searchPath);
+        } else if (hasPyprojectWithPixi) {
+            traceVerbose(`Found Pixi project (pyproject.toml with [tool.pixi]) at: ${searchPath}`);
+            results.push(searchPath);
+        }
+
+        // Don't recurse beyond maxDepth
+        if (currentDepth >= maxDepth) {
+            return results;
+        }
+
+        // Search subdirectories
+        const entries = fs.readdirSync(searchPath, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isDirectory() && !entry.name.startsWith('.')) {
+                const subdirPath = path.join(searchPath, entry.name);
+                results.push(...findPixiProjects(subdirPath, maxDepth, currentDepth + 1));
+            }
+        }
+    } catch (error) {
+        traceVerbose(`Error searching for pixi projects in ${searchPath}: ${error}`);
+    }
+
+    return results;
 }
