@@ -107,6 +107,20 @@ export async function refreshPixi(project_path: string): Promise<PixiEnvironment
         const projectName = pixiInfo.project_info.name;
         const manifestPath = pixiInfo.project_info.manifest_path;
 
+        // Read configuration options for --no-install and --frozen flags
+        const config = workspace.getConfiguration('pixi-code');
+        const noInstall = config.get<boolean>('noInstall', false);
+        const frozen = config.get<boolean>('frozen', false);
+
+        // Build additional flags for run and shell commands
+        const additionalFlags: string[] = [];
+        if (noInstall) {
+            additionalFlags.push('--no-install');
+        }
+        if (frozen) {
+            additionalFlags.push('--frozen');
+        }
+
         for (const pixiEnv of pixiInfo.environments_info) {
             const stdout = await runPixi(
                 ['list', '--no-install', '--frozen', '--json', '--environment', pixiEnv.name],
@@ -140,12 +154,12 @@ export async function refreshPixi(project_path: string): Promise<PixiEnvironment
                     run: { executable: pythonExecutable },
                     activatedRun: {
                         executable: pixi,
-                        args: ['run', '--manifest-path', manifestPath, '-e', pixiEnv.name, 'python'],
+                        args: ['run', '--manifest-path', manifestPath, '-e', pixiEnv.name, ...additionalFlags, 'python'],
                     },
                     activation: [
                         {
                             executable: pixi,
-                            args: ['shell', '--manifest-path', manifestPath, '-e', pixiEnv.name],
+                            args: ['shell', '--manifest-path', manifestPath, '-e', pixiEnv.name, ...additionalFlags],
                         },
                     ],
                     deactivation: [
