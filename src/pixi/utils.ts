@@ -266,13 +266,27 @@ export async function refreshPixi(project_path: string): Promise<PixiEnvironment
         }
 
         for (const pixiEnv of pixiInfo.environments_info) {
-            const stdout = await runPixi(
-                ['list', '--no-install', '--frozen', '--json', '--environment', pixiEnv.name],
-                {
-                    cwd: project_path,
-                },
-            );
-            const pixiPackages: PixiPackage[] = JSON.parse(stdout);
+            if (pixiEnv.platforms && !pixiEnv.platforms.includes(pixiInfo.platform)) {
+                traceVerbose(
+                    `Skipping environment '${pixiEnv.name}' in ${project_path}: ` +
+                        `target platforms [${pixiEnv.platforms.join(', ')}] do not include host '${pixiInfo.platform}'`,
+                );
+                continue;
+            }
+
+            let pixiPackages: PixiPackage[];
+            try {
+                const stdout = await runPixi(
+                    ['list', '--no-install', '--frozen', '--json', '--environment', pixiEnv.name],
+                    {
+                        cwd: project_path,
+                    },
+                );
+                pixiPackages = JSON.parse(stdout);
+            } catch (error) {
+                traceInfo(`Skipping environment '${pixiEnv.name}' in ${project_path}: ${error}`);
+                continue;
+            }
             const pythonPackage = pixiPackages.find((pkg) => pkg.name === 'python');
 
             // Skip environments without Python
