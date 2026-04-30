@@ -5,6 +5,13 @@ All notable changes to the "pixi-code" extension will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5+cusp.1] - 2026-04-30
+
+- Skip Pixi environments whose target platforms do not include the host platform, instead of failing the entire
+  project refresh. Previously, a workspace with an environment locked only for `linux-aarch64` would surface no
+  environments at all on a `linux-64` host (and vice versa).
+- Wrap per-environment `pixi list` calls in try/catch so a single failing environment no longer drops the rest.
+
 ## [0.1.5] - 2025-09-13
 
 - Fix debugging Pixi projects in the new version of the Python Environments extension by fixing the `activatedRun`
